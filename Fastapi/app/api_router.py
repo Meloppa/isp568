@@ -1,16 +1,20 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import io
 import matplotlib.pyplot as plt
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 import time
 
-# Import logic from other modules using simple file names
-from fuzzy_system import evaluate_score, performance_variable
-from llm_service import initialize_llm, get_ai_suggestion, get_lecturer_chat_response
-from reports import generate_student_report_pdf
+# --- Module Imports ---
+try:
+    from fuzzy_system import evaluate_score, get_performance_level 
+    from llm_service import initialize_llm, get_ai_suggestion, get_lecturer_chat_response
+    from reports import generate_student_report_pdf
+except ImportError as e:
+    print(f"CRITICAL IMPORT ERROR: Could not find supporting modules. Error: {e}")
+    raise e
 
 router = APIRouter(prefix="/api/v1")
 
@@ -22,15 +26,23 @@ class EvaluationInput(BaseModel):
     test_score: float = Field(..., ge=0, le=100, description="Test score percentage (0-100).")
     assignment_score: float = Field(..., ge=0, le=100, description="Assignment score percentage (0-100).")
 
+class Message(BaseModel):
+    """Single message in the conversation history."""
+    role: str = Field(..., description="The role of the message sender ('user' or 'assistant').")
+    content: str = Field(..., description="The content of the message.")
+
 class ChatQuery(BaseModel):
-    """Input model for the chat lecturer endpoint."""
+    """Input model for the chat lecturer endpoint, now including history."""
     student_performance_level: str = Field(..., description="The calculated performance level (e.g., 'Weak', 'Average', 'Excellent').")
-    question: str = Field(..., description="The student's question for the lecturer.")
+    # History must be passed by the client
+    history: List[Message] = Field(default=[], description="The previous messages in the conversation (user and assistant).")
+    # FIX: Changed field name from 'current_question' to 'question' to match client's payload
+    question: str = Field(..., description="The student's new question for the lecturer.")
+
 
 # Dependency to check LLM status
 def check_llm_status():
     if not initialize_llm():
-        # This will trigger if the Ollama server is not running or the model is not loaded.
         raise HTTPException(status_code=503, detail="LLM service is unavailable. Ensure Ollama is running and the model is loaded.")
 
 # --- Endpoint Implementations ---
@@ -42,8 +54,20 @@ async def evaluate_student(input_data: EvaluationInput):
     """
     try:
         inputs = input_data.model_dump()
+        
+        # 1. FUZZIFICATION: The crisp input scores (attendance, test, assignment) 
+        #    are mapped to the degree of membership in the fuzzy sets (Low, Medium, High).
+        
+        # 2. INFERENCE & AGGREGATION: The fuzzy rules are applied using AND/OR operators
+        #    to determine the output fuzzy shape (Weak, Average, Good, Excellent).
+        
+        # The evaluate_score function runs the fuzzy computation:
         result = evaluate_score(inputs['attendance'], inputs['test_score'], inputs['assignment_score'])
 
+        # 3. DEFUZZIFICATION: The resulting output fuzzy shape is converted back 
+        #    into a single, crisp score (result['fuzzy_score']) using the Centroid 
+        #    method (default in skfuzzy).
+        
         return {
             "status": "success",
             "inputs": inputs,
@@ -56,28 +80,6 @@ async def evaluate_student(input_data: EvaluationInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
-@router.get("/graph", tags=["Visualization"])
-async def get_fuzzy_graph():
-    """
-    Generates a PNG image of the fuzzy membership functions for the 'Performance' output.
-    """
-    try:
-        # Plotting the Performance output variable MFs
-        fig, ax = plt.subplots(figsize=(8, 4))
-        performance_variable.view(ax=ax)
-        ax.set_title("Performance Evaluation Membership Functions")
-        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
-        
-        # Save the figure to an in-memory buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig) # Close the figure to free memory
-        buf.seek(0)
-        
-        # Return the image as a streaming response
-        return Response(content=buf.read(), media_type="image/png")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating graph: {e}")
 
 @router.post("/suggestion", response_model=Dict[str, Any], dependencies=[Depends(check_llm_status)], tags=["LLM Advisor"])
 async def get_ai_suggestion_endpoint(input_data: EvaluationInput):
@@ -109,13 +111,21 @@ async def get_ai_suggestion_endpoint(input_data: EvaluationInput):
 @router.post("/chat", response_model=Dict[str, Any], dependencies=[Depends(check_llm_status)], tags=["LLM Lecturer"])
 async def chat_with_lecturer_endpoint(chat_data: ChatQuery):
     """
-    Acts as a lecturer (using Ollama) who only answers questions related to student evaluation and suggestions.
+    Acts as a lecturer (using Ollama) who answers questions related to student evaluation and suggestions, 
+    maintaining conversation history.
     """
+    # Prepare history for the service function
+    history_messages = [msg.model_dump() for msg in chat_data.history]
+    
+    # FIX: Use chat_data.question (the new field name from the Pydantic model)
+    current_question = chat_data.question 
+
     # Run synchronous LLM chat call in a threadpool
     answer = await run_in_threadpool(
         get_lecturer_chat_response,
         chat_data.student_performance_level,
-        chat_data.question
+        current_question, # Pass the question 
+        history_messages # Pass the history list
     )
 
     if answer.startswith("LLM service is not initialized") or answer.startswith("An error occurred"):

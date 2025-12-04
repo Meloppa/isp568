@@ -61,11 +61,15 @@ def get_performance_level(score: float) -> str:
 def evaluate_score(attendance_score: float, test_score_val: float, assignment_score_val: float) -> dict:
     """Runs the fuzzy logic evaluation."""
     try:
+        # Fuzzification happens implicitly here when setting inputs
         PERFORMANCE_SIMULATION.input['attendance'] = attendance_score
         PERFORMANCE_SIMULATION.input['test_score'] = test_score_val
         PERFORMANCE_SIMULATION.input['assignment_score'] = assignment_score_val
 
+        # Inference and Aggregation occur during compute()
         PERFORMANCE_SIMULATION.compute()
+        
+        # Defuzzification extracts the crisp score from the output fuzzy set
         final_score = PERFORMANCE_SIMULATION.output['performance']
         level = get_performance_level(final_score)
 
@@ -74,10 +78,6 @@ def evaluate_score(attendance_score: float, test_score_val: float, assignment_sc
             "performance_level": level,
         }
     except ValueError as e:
-        # Handle cases where computation fails (e.g., no rule fires for extreme inputs)
         raise ValueError(f"Fuzzy computation failed: {e}. Check if input scores are valid and rules cover the input space.")
     except Exception as e:
         raise Exception(f"An unexpected error occurred during fuzzy evaluation: {e}")
-
-# Expose the Performance variable for plotting
-performance_variable = performance
