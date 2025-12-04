@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+scikit-fuzzy
+numpy
+scipy
+matplotlib
+python-multipart  # Required for FastAPI to handle file responses (like PDF/PNG)
+openai
+reportlab
