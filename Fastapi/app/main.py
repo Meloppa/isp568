@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from api_router import router
 from llm_service import initialize_llm
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="Fuzzy Student Evaluation System",
@@ -17,5 +18,16 @@ async def startup_event():
     initialize_llm()
     print("--- Application ready. ---")
 
+origins = [
+    "http://localhost:5173",   # React
+    "http://127.0.0.1:5173",
+]
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"],
+)
 # uvicorn main:app --reload
