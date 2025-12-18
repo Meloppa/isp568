@@ -3,7 +3,7 @@ from typing import Optional, Dict, List
 
 # --- IMPORTANT: Ollama Configuration ---
 OLLAMA_BASE_URL = "http://localhost:11434/v1" 
-OLLAMA_MODEL_NAME = "qwen3-vl:4b"                 # Specify the model you have running in Ollama
+OLLAMA_MODEL_NAME = "gemma3:1b"                 # Specify the model you have running in Ollama
 
 LLM_CLIENT: Optional[OpenAI] = None
 
@@ -52,30 +52,29 @@ def generate_llm_response(messages: List[Dict]) -> str:
         return f"An error occurred while communicating with the local Ollama server. Check if the model '{OLLAMA_MODEL_NAME}' is running: {e}"
 
 def get_ai_suggestion(inputs: Dict, level: str, score: float) -> str:
-    """Generates an academic suggestion based on the student's performance."""
-    context = (
-        f"The student received the following evaluation scores: "
-        f"Attendance: {inputs['attendance']}%, Test Score: {inputs['test_score']}%, "
-        f"Assignment Score: {inputs['assignment_score']}%. "
-        f"The calculated overall performance level is **{level}** (Score: {score}/100)."
-    )
-    
-    system_prompt = (
-        "You are a supportive and professional Academic Advisor focused on student success. "
-        "Your task is to analyze the provided student evaluation scores and performance level, and offer **a single, plain-text paragraph of** "
-        "concise, actionable, and encouraging suggestions for improvement or continued excellence. "
-        "Focus on how the student can adjust their attendance, test preparation, or assignment effort. **Do not use markdown formatting (like bolding, lists, or headers) in your final response.**"
-    )
-    
-    user_prompt = f"{context}\n\nBased on these details, please provide a constructive suggestion and an encouraging closing statement."
-    
-    # Structure messages for the API call (No history for this single-turn suggestion)
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt}
-    ]
-    
-    return generate_llm_response(messages)
+    try:
+        context = (
+            f"The student received the following evaluation scores: "
+            f"Attendance: {inputs['attendance']}%, "
+            f"Test Score: {inputs['test_score']}%, "
+            f"Assignment Score: {inputs['assignment_score']}%, "
+            f"Ethics: {inputs['ethics']}%, "
+            f"Cognitive Skills: {inputs['cognitive']}%. "
+            f"The calculated overall performance level is {level} "
+            f"(Fuzzy Score: {score}/100)."
+        )
+        system_prompt = (
+        "You are an Academic Mentor focused on holistic student development. Review the student's evaluation, paying close attention to how their ethics and cognitive skills influence their overall performance score. Write one concise and encouraging paragraph that explains how improving their weakest metric will boost their overall academic standing. Use professional, plain text only. Avoid lists, headers, or markdown formatting."
+        )
+        user_prompt = context
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return generate_llm_response(messages)
+    except KeyError as e:
+        return f"Error: Missing input key {e}"
+
 
 # MODIFIED: Changed parameter name from 'current_question' to 'question'
 def get_lecturer_chat_response(performance_level: str, question: str, history: List[Dict]) -> str:
