@@ -68,6 +68,34 @@ rules = [
 
 PERFORMANCE_CTRL = ctrl.ControlSystem(rules)
 
+"""
+antecedents = [attendance, test_score, assignment_score, ethics, cognitive]
+terms = ['low', 'medium', 'high']
+
+rules = []
+
+for combo in itertools.product(terms, repeat=5):
+    
+    antecedent_expr = (attendance[combo[0]] & test_score[combo[1]] & 
+                       assignment_score[combo[2]] & ethics[combo[3]] & cognitive[combo[4]])
+
+    high_count = combo.count('high')
+    medium_count = combo.count('medium')
+    
+    if high_count >= 4:
+        perf = performance['excellent']
+    elif high_count >= 3:
+        perf = performance['good']
+    elif medium_count >= 3:
+        perf = performance['average']
+    else:
+        perf = performance['weak']
+    
+    rules.append(ctrl.Rule(antecedent_expr, perf))
+"""
+
+# Create control system
+PERFORMANCE_CTRL = ctrl.ControlSystem(rules)
 # --- Helper Functions ---
 def get_performance_level(score: float) -> str:
     if score < 40: return "Weak"
