@@ -1,6 +1,7 @@
 import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
+import itertools
 
 # --- Variables ---
 input_range = np.arange(0, 101, 1)
@@ -21,6 +22,7 @@ performance['average'] = fuzz.trimf(input_range, [35, 50, 65])
 performance['good'] = fuzz.trimf(input_range, [60, 75, 85])
 performance['excellent'] = fuzz.trimf(input_range, [80, 100, 100])
 
+"""
 # --- 3. Rules ---
 rules = [
     # EXCELLENT
@@ -92,7 +94,7 @@ for combo in itertools.product(terms, repeat=5):
         perf = performance['weak']
     
     rules.append(ctrl.Rule(antecedent_expr, perf))
-"""
+
 
 # Create control system
 PERFORMANCE_CTRL = ctrl.ControlSystem(rules)
